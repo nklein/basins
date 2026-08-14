@@ -18,7 +18,13 @@
                  0.0)))
     (setf *last-frame-time* now)
     (update-camera-from-mouse)          ; after STEP-HOST, so events are in
-    (update-balls dt)
+    ;; Bank the frame's real time and spend it in whole substeps, so the
+    ;; integrator always sees the same dt.  *MAX-TIMESTEP* above already caps
+    ;; how many of those one frame can owe.
+    (incf *time-accumulator* dt)
+    (loop :while (>= *time-accumulator* *fixed-timestep*)
+          :do (update-balls *fixed-timestep*)
+              (decf *time-accumulator* *fixed-timestep*))
     (draw-frame)))
 
 (defun start (&optional (width 640) (height 480))

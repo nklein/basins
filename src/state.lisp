@@ -44,6 +44,9 @@
 (defparameter *running* nil)
 (defparameter *last-frame-time* nil)
 
+;; Real time banked up but not yet paid out as whole *FIXED-TIMESTEP* substeps.
+(defparameter *time-accumulator* 0.0)
+
 ;; Mouse position as of the last frame of an in-progress drag, or NIL when no
 ;; button is held.  Resetting it to NIL on release is what stops the next
 ;; press from being read as one huge jump.

@@ -17,7 +17,6 @@
 (defclass ball ()
   ((position :accessor pos :initarg :position)
    (velocity :accessor vel :initarg :velocity)
-   (acceleration :accessor acc :initarg :acceleration)
    (radius :reader radius :initarg :radius)
    (color :reader color :initarg :color))
   (:default-initargs :position (v! 0 0 0)
@@ -62,56 +61,86 @@
                        *balls*))
   (values))
 
+(defun snap-to-surface (b)
+  "Put B back on the heightfield.
+
+Z is a dependent coordinate: the dynamics live entirely in the XY plane, so
+this just re-derives Z from X and Y."
+  (with-accessors ((pos pos)) b
+    (setf (v:z pos) (+ (influence-at (v:x pos) (v:y pos))
+                       (radius b)))))
+
 (defun update-ball (b dt)
   (let ((gforce *gravitational-force*)
-        (scale/2 (/ *grid-scale* 2)))
+        (limit (- (/ *grid-scale* 2) *epsilon*)))
     (with-accessors ((pos pos) (vel vel)) b
-      (let ((x (v:x pos))
-            (y (v:y pos)))
-        (let ((d/dx (dinfluence/dx-at x y))
-              (d/dy (dinfluence/dy-at x y)))
-          (setf vel (v3:+ vel
-                          (v! (* gforce dt d/dx)
-                              (* gforce dt d/dy)
-                              0))))
-        (setf pos (v3:+ pos
-                        (v3:*s vel dt)))
-        ;; bounce at edges
-        (unless (< (- scale/2) x scale/2)
-          (setf (v:x pos) (clamp (- *epsilon* scale/2) (- scale/2 *epsilon*) x)
-                (v:x vel) (- (v:x vel)))
-          #+ (or) (format *debug-io* "~A~%" vel))
-        (unless (< (- scale/2) y scale/2)
-          (setf (v:y pos) (clamp (- *epsilon* scale/2) (- scale/2 *epsilon*) y)
-                (v:y vel) (- (v:y vel))))
-        ;; stay on surface
-        (setf (v:z pos) (+ (influence-at (v:x pos) (v:y pos))
-                           (radius b)))))))
+      ;; Symplectic Euler in the XY plane.  The surface enters only through its
+      ;; gradient: a = g * grad h, which is -grad U for U = -g * h, so this is
+      ;; a particle in a potential well and conserves 1/2|v|^2 + U exactly.
+      (let ((d/dx (dinfluence/dx-at (v:x pos) (v:y pos)))
+            (d/dy (dinfluence/dy-at (v:x pos) (v:y pos))))
+        (setf vel (v3:+ vel
+                        (v! (* gforce dt d/dx)
+                            (* gforce dt d/dy)
+                            0))))
+      (setf pos (v3:+ pos
+                      (v3:*s vel dt)))
+      ;; Bounce at the edges.  Mirror the overshoot rather than clamping it
+      ;; away: clamping teleports the ball to the wall, and on a slope that
+      ;; jump in height is free potential energy.
+      (macrolet ((bounce (axis)
+                   `(let ((p (,axis pos)))
+                      (cond ((> p limit)
+                             (setf (,axis pos) (- (* 2 limit) p)
+                                   (,axis vel) (- (,axis vel))))
+                            ((< p (- limit))
+                             (setf (,axis pos) (- (* -2 limit) p)
+                                   (,axis vel) (- (,axis vel))))))))
+        (bounce v:x)
+        (bounce v:y))
+      (snap-to-surface b))))
 
 (defun reconcile-collisions ()
-  ;; since all balls are the same mass and perfectly elastic, they just swap velocities
-  ;; ...or they would if they were point particles, but as they are bigger than all that,
-  ;;    we are going to have to do more...
+  ;; Since all balls are the same mass and perfectly elastic, a pair just
+  ;; exchanges the component of relative velocity along the line of centres.
+  ;;
+  ;; All of it happens in XY.  The dynamics live in that plane, and letting Z
+  ;; into the impulse leaves a phantom VEL.Z that never decays and never does
+  ;; anything -- Z position is re-derived from the surface either way -- but
+  ;; which every energy tally then counts.
   (dolist (a *balls*)
     (with-accessors ((pa pos) (va vel) (ra radius)) a
       (dolist (b *balls*)
         (unless (eq a b)
           (with-accessors ((pb pos) (vb vel) (rb radius)) b
-            (let* ((pb-pa (v3:- pb pa))
-                   (dist (v3:length pb-pa)))
-              (unless (<= (+ ra rb) dist)
-                (let* ((dir (v3:normalize pb-pa))
-                       (mid (v3:*s (v3:+ pa pb) 0.5))
-                       (vb-va (v3:- vb va))
-                       (dist^2 (* dist dist))
-                       (dv.dp (v3:dot vb-va pb-pa))
-                       (scaled-pb-pa (v3:*s pb-pa (/ dv.dp dist^2))))
-                  (setf va (v3:+ va scaled-pb-pa)
-                        vb (v3:- vb scaled-pb-pa))
-                  (setf pa (v3:- mid
-                                 (v3:*s dir (+ ra (/ *epsilon* 2))))
-                        pb (v3:+ mid
-                                 (v3:*s dir (+ rb (/ *epsilon* 2))))))))))))))
+            (let* ((dx (- (v:x pb) (v:x pa)))
+                   (dy (- (v:y pb) (v:y pa)))
+                   (dist^2 (+ (* dx dx) (* dy dy)))
+                   (sum-r (+ ra rb)))
+              (when (< *epsilon* dist^2 (* sum-r sum-r))
+                (let ((dv.dp (+ (* (- (v:x vb) (v:x va)) dx)
+                                (* (- (v:y vb) (v:y va)) dy))))
+                  ;; Only trade momentum when the pair is actually closing.  One
+                  ;; that overlaps but is already separating would otherwise be
+                  ;; flipped a second time, which is a pure energy source -- and
+                  ;; in a basin, where balls pile up, that fires nonstop.
+                  (when (minusp dv.dp)
+                    (let ((s (/ dv.dp dist^2)))
+                      (incf (v:x va) (* s dx))
+                      (incf (v:y va) (* s dy))
+                      (decf (v:x vb) (* s dx))
+                      (decf (v:y vb) (* s dy)))))
+                ;; Separate them symmetrically along the line of centres, then
+                ;; put both back on the field.
+                (let* ((dist (sqrt dist^2))
+                       (push (/ (- (+ sum-r *epsilon*) dist)
+                                (* 2 dist))))
+                  (decf (v:x pa) (* push dx))
+                  (decf (v:y pa) (* push dy))
+                  (incf (v:x pb) (* push dx))
+                  (incf (v:y pb) (* push dy))
+                  (snap-to-surface a)
+                  (snap-to-surface b))))))))))
 
 (defun update-balls (dt)
   "Advance every ball by DT seconds."
@@ -121,23 +150,29 @@
 
 
 (defun momentum (b)
-  (let ((v (vel b)))
-    (v3:length v)))
+  (v3:length (vel b)))
 
 (defun kinetic-energy (b)
+  ;; XY only, to match the dynamics.
   (let ((v (vel b)))
-    (/ (v3:dot v v) 2.0)))
+    (/ (+ (* (v:x v) (v:x v))
+          (* (v:y v) (v:y v)))
+       2.0)))
 
 (defun potential-energy (b)
-  (let ((h (v:z (vel b))))
-    (* *gravitational-force* h)))
+  ;; a = g * grad h = -grad U, so U = -g * h.  H is the height of the field
+  ;; under the ball, read from the field rather than from POS.Z so that this is
+  ;; right even when called between a collision and the next snap.
+  (let ((pos (pos b)))
+    (* (- *gravitational-force*)
+       (influence-at (v:x pos) (v:y pos)))))
 
 (defun energy (b)
   (+ (kinetic-energy b)
      (potential-energy b)))
 
 (defun total-momentum ()
-  (reduce #'+ *balls* :key #'momentum :initial-value 0.0))
+  (reduce #'+ *balls* :key #'momentum :initial-value 0))
 
 (defun total-energy ()
   (reduce #'+ *balls* :key #'energy :initial-value 0.0))
