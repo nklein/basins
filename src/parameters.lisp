@@ -16,15 +16,15 @@
 
 ;; A single directional "sun".  This is the direction pointing *towards* the
 ;; light, not the direction the light travels.  It is normalised in the shader.
-(defparameter *light-direction* (v! -0.3 0.6 2.2))
+(defparameter *light-direction* (v! -0.1 2.3 7.2))
 (defparameter *light-color* (v! 0.3 0.3 0.25))
 (defparameter *ambient-color* (v! 0.22 0.23 0.26))
 
 (defparameter *field-albedo* (v! 0.40 0.65 0.40))
 (defparameter *field-shininess* 10.0)
-(defparameter *ball-shininess* 64.0)
+(defparameter *ball-shininess* 32.0)
 
-(defparameter *camera-position* (v! 15 25.0 10.0))
+(defparameter *camera-position* (v! 15 25.0 25.0))
 (defparameter *camera-target* (v! 0.0 0.0 0.0))
 (defparameter *camera-up* (v! 0.0 0.0 1.0))
 (defparameter *camera-fov* 60.0)
@@ -52,7 +52,7 @@
 
 (defparameter *grid-width* 255)
 (defparameter *grid-depth* 255)
-(defparameter *grid-scale* 30.0)
+(defparameter *grid-scale* 40.0)
 
 (defparameter *ball-lat-lines* 10)
 (defparameter *ball-long-lines* 20)

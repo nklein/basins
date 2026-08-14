@@ -7,11 +7,11 @@
 ;;;; ------------------------------------------------------------------
 
 (defun random-ball-color ()
-  (let ((a (v! 1.0 0.7 0.4))
+  (let ((a (v! 1.0 1.0 0.4))
         (b (v! 0.9 0.5 0.3))
-        (c (v! 0.95 0.65 1.0)))
-    (v3:lerp (v3:lerp a b (random 1.0))
-             c
+        (c (v! 0.95 0.85 1.0)))
+    (v3:lerp a
+             (v3:lerp b c (random 1.0))
              (random 1.0))))
 
 (defclass ball ()
@@ -33,7 +33,7 @@
     (scale-ball-velocity b s)))
 
 (defun random-velocity ()
-  (let ((cis-theta (* (+ 1 (random 1.0))
+  (let ((cis-theta (* (random 0.125)
                       (cis (random (* 2 pi))))))
     (v! (cospart cis-theta)
         (sinpart cis-theta)
@@ -48,14 +48,19 @@
            (* *grid-scale* (- (random 1.0) 0.5))))
     (list (rnd) (rnd))))
 
-(defun make-initial-balls ()
+(defun make-initial-balls (&optional (n 250))
   "Return the list of BALLs the simulation starts with."
-  (loop :repeat 20
+  (loop :repeat n
         :for (x y) := (random-xy)
         :collecting (make-instance 'ball
                                    :position (v! x y (+ (influence-at x y) *ball-radius*))
                                    :velocity (random-velocity)
                                    :radius *ball-radius*)))
+
+(defun add-balls (n)
+  (setf *balls* (nconc (make-initial-balls n)
+                       *balls*))
+  (values))
 
 (defun update-ball (b dt)
   (let ((gforce -2)
