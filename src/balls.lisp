@@ -63,7 +63,7 @@
   (values))
 
 (defun update-ball (b dt)
-  (let ((gforce -2)
+  (let ((gforce *gravitational-force*)
         (scale/2 (/ *grid-scale* 2)))
     (with-accessors ((pos pos) (vel vel)) b
       (let ((x (v:x pos))
@@ -118,3 +118,26 @@
   (dolist (b *balls*)
     (update-ball b dt))
   (reconcile-collisions))
+
+
+(defun momentum (b)
+  (let ((v (vel b)))
+    (v3:length v)))
+
+(defun kinetic-energy (b)
+  (let ((v (vel b)))
+    (/ (v3:dot v v) 2.0)))
+
+(defun potential-energy (b)
+  (let ((h (v:z (vel b))))
+    (* *gravitational-force* h)))
+
+(defun energy (b)
+  (+ (kinetic-energy b)
+     (potential-energy b)))
+
+(defun total-momentum ()
+  (reduce #'+ *balls* :key #'momentum :initial-value 0.0))
+
+(defun total-energy ()
+  (reduce #'+ *balls* :key #'energy :initial-value 0.0))

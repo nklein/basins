@@ -21,7 +21,7 @@
                                                               :scale -4
                                                               :freq 1/3)
 
-                                      (make-instance 'fn-sinc :scale 8 :x0 -12 :y0 0 :freq 1/2)                                      (make-instance 'fn-sinc :scale -3 :x0 8 :y0 -3 :freq 9/10)))
+                                      (make-instance 'fn-sinc :scale 8 :x0 -12 :y0 0 :freq 1/2)))
 
 
 (defparameter *field-vertices* nil)

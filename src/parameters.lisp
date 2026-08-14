@@ -53,6 +53,7 @@
 (defparameter *grid-width* 255)
 (defparameter *grid-depth* 255)
 (defparameter *grid-scale* 40.0)
+(defparameter *gravitational-force* -2.0)
 
 (defparameter *ball-lat-lines* 10)
 (defparameter *ball-long-lines* 20)
