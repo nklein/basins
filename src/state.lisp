@@ -30,6 +30,12 @@
 (defparameter *ball-indices* nil)
 (defparameter *ball-stream* nil)
 
+;; Shadow mapping: a depth-only framebuffer rendered from the light, the
+;; texture behind it, and the sampler the beauty pass reads it through.
+(defparameter *shadow-texture* nil)
+(defparameter *shadow-fbo* nil)
+(defparameter *shadow-sampler* nil)
+
 (defparameter *balls* nil)
 
 (defparameter *running* nil)

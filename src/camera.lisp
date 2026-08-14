@@ -83,6 +83,39 @@ vertical plane holding the z-axis and the camera, bounded below by
         (setf *drag-anchor* nil))))
 
 ;;;; ------------------------------------------------------------------
+;;;; The light's viewpoint
+;;;; ------------------------------------------------------------------
+
+(defun light-up-vector ()
+  "An up vector for the light's camera that is not parallel to the light.
+
+*LIGHT-DIRECTION* points close to straight down the world z-axis, so handing
+LOOK-AT the usual *CAMERA-UP* would be badly conditioned, and exactly
+degenerate for a sun directly overhead.  Lean on whichever axis the light
+uses least."
+  (let ((direction (v3:normalize *light-direction*)))
+    (if (< (abs (aref direction 2)) 0.9)
+        (v! 0.0 0.0 1.0)
+        (v! 0.0 1.0 0.0))))
+
+(defun world->light-clip ()
+  "The matrix taking world space into the light's clip space.
+
+The light is directional: its rays are parallel and it has no position, so
+the projection is orthographic rather than perspective, and the notional eye
+can sit anywhere far enough back along the light direction.  The box has to
+enclose everything that can cast onto the field."
+  (let* ((direction (v3:normalize *light-direction*))
+         (eye (v3:+ *camera-target* (v3:*s direction *shadow-eye-distance*)))
+         (world->light (m4:look-at (light-up-vector) eye *camera-target*))
+         (light->clip (rtg-math.projection:orthographic
+                       (* 2.0 *shadow-extent*)
+                       (* 2.0 *shadow-extent*)
+                       *shadow-near*
+                       *shadow-far*)))
+    (m4:* light->clip world->light)))
+
+;;;; ------------------------------------------------------------------
 ;;;; Viewport
 ;;;; ------------------------------------------------------------------
 

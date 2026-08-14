@@ -18,7 +18,7 @@
 ;; light, not the direction the light travels.  It is normalised in the shader.
 (defparameter *light-direction* (v! -0.3 0.6 2.2))
 (defparameter *light-color* (v! 0.3 0.3 0.25))
-(defparameter *ambient-color* (v! 0.12 0.13 0.16))
+(defparameter *ambient-color* (v! 0.22 0.23 0.26))
 
 (defparameter *field-albedo* (v! 0.40 0.65 0.40))
 (defparameter *field-shininess* 10.0)
@@ -57,3 +57,44 @@
 (defparameter *ball-lat-lines* 10)
 (defparameter *ball-long-lines* 20)
 (defparameter *ball-radius* 0.5)
+
+;;;; ------------------------------------------------------------------
+;;;; Shadows
+;;;;
+;;;; These come after *GRID-SCALE* because the light's box is sized from it.
+;;;; ------------------------------------------------------------------
+
+;; Edge length of the square depth map rendered from the light's viewpoint.
+;; Larger is sharper and costs memory; this is the first knob to turn if the
+;; shadow edges look blocky.
+(defparameter *shadow-map-size* 2048)
+
+;; Half-width of the light's orthographic box.  It has to enclose everything
+;; that can cast, and the field's corners sit at *GRID-SCALE* / 2 times the
+;; square root of two, so this leaves a little margin over that.
+(defparameter *shadow-extent* (* *grid-scale* 0.75))
+
+;; How far back along the light direction the light's eye sits, and the depth
+;; range in front of it.  Only needs to be far enough that the whole field is
+;; between the near and far planes.
+(defparameter *shadow-eye-distance* 60.0)
+(defparameter *shadow-near* 1.0)
+(defparameter *shadow-far* 120.0)
+
+;; Slack subtracted from a fragment's depth before comparing it against the
+;; map, to stop surfaces shadowing themselves in stripes ("shadow acne").
+;; Surfaces lit at a grazing angle span more depth per texel and so need
+;; more; the pair is interpolated by the angle.  Too much detaches a shadow
+;; from whatever cast it, so raise these only until the stripes go.
+(defparameter *shadow-bias-min* 0.0015)
+(defparameter *shadow-bias-max* 0.008)
+
+;; Spacing between neighbouring shadow taps, counted in map texels.  The
+;; filter is a fixed 5x5 grid, so this, not the tap count, is what sets how
+;; wide the soft edge is.
+;;
+;; At 1.0 the taps are adjacent and the whole kernel spans four texels, which
+;; over this light's box works out at under a tenth of a ball radius and is
+;; invisible.  Raise it to widen the penumbra.  Push it much past 4 or 5 and
+;; the fixed grid starts to show as banding rather than a smooth gradient.
+(defparameter *shadow-softness* 3.5)

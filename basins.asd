@@ -25,8 +25,11 @@
                              (:file "drawing" :depends-on ("package"
                                                            "parameters"
                                                            "state"
-                                                           "shaders"))
+                                                           "shaders"
+                                                           "camera"
+                                                           "balls"))
                              (:file "setup-cleanup" :depends-on ("package"
+                                                                 "parameters"
                                                                  "state"
                                                                  "geometry"))
                              (:file "basins" :depends-on ("package"
