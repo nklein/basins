@@ -14,7 +14,8 @@
                                                          "functions"))
                              (:file "shaders" :depends-on ("package"))
                              (:file "camera" :depends-on ("package"
-                                                          "parameters"))
+                                                          "parameters"
+                                                          "state"))
                              (:file "geometry" :depends-on ("package"
                                                             "parameters"
                                                             "functions"))

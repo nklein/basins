@@ -24,3 +24,8 @@
 
 (defparameter *running* nil)
 (defparameter *last-frame-time* nil)
+
+;; Mouse position as of the last frame of an in-progress drag, or NIL when no
+;; button is held.  Resetting it to NIL on release is what stops the next
+;; press from being read as one huge jump.
+(defparameter *drag-anchor* nil)

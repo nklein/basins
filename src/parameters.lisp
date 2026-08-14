@@ -31,6 +31,19 @@
 (defparameter *camera-near* 0.1)
 (defparameter *camera-far* 500.0)
 
+;; Degrees the camera swings per pixel of mouse drag.
+(defparameter *camera-orbit-speed* 0.4)
+
+;; How low the camera may be swung.  Well above zero, so that the view stays
+;; on the heightfield from above rather than grazing it edge-on or dropping
+;; underneath it.
+(defparameter *camera-lower-pitch-limit* 15.0)
+
+;; How near the camera may come to straight overhead.  At exactly 90 degrees
+;; the view direction is parallel to *CAMERA-UP* and LOOK-AT has no way to
+;; decide which way up the picture goes.
+(defparameter *camera-upper-pitch-limit* 89.0)
+
 ;; Longest simulation step we are willing to take.  Without this, pausing at
 ;; the REPL and resuming hands the integrator one enormous dt.
 (defparameter *max-timestep* 0.1)

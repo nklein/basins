@@ -17,6 +17,7 @@
                       *max-timestep*)
                  0.0)))
     (setf *last-frame-time* now)
+    (update-camera-from-mouse)          ; after STEP-HOST, so events are in
     (update-balls dt)
     (draw-frame)))
 
