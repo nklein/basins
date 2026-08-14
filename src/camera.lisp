@@ -101,10 +101,13 @@ follows along without being told."
 (defun sync-viewport ()
   "Match the viewport to the window as it is at this moment.
 
-Skitter reports size *changes*, so a window resized while we were not
-listening would otherwise go unnoticed until the next resize."
-  (let ((size (window-size (window 0))))
-    (when size
+The size comes from the host rather than from skitter.  Skitter's window
+size starts at #(0 0) and is only ever written by the :resized and
+:size-changed events, so before the window has been dragged it reports a
+size the window has never had.  SURFACE-RESOLUTION asks SDL directly and is
+right from the first frame."
+  (let ((size (surface-resolution (current-surface))))
+    (when (and size (plusp (aref size 0)) (plusp (aref size 1)))
       (resize-viewport size))))
 
 (defun normal-matrix (model->world)
