@@ -124,11 +124,55 @@ triangle, wound counter-clockwise seen from above."
 Every ball is drawn from this one mesh, scaled by its radius and translated
 into place, so each vertex's normal is simply its position."
   (let ((points (append (list (v! 0 0  1))
-                        (loop :for lat :from 1 :below (1- *ball-lat-lines*)
+                        (loop :for lat :from 1 :below *ball-lat-lines*
                               :appending (loop :for long :from 0 :below *ball-long-lines*
                                                :collecting (%ball-point lat long)))
                         (list (v! 0 0 -1))))
-        (indices (list 0 1 2)))
+        (indices (append
+                  ;; north cap
+                  (loop :with offset := 1
+                        :with pole := 0
+                        :for long :from 0 :below *ball-long-lines*
+                        :for next := (mod (1+ long) *ball-long-lines*)
+                        :collecting pole
+                        :collecting (+ long offset)
+                        :collecting (+ next offset))
+                  #|
+                      *---*---*---*    even
+                       \ / \ / \ / \
+                        *---*---*---*  odd
+                       / \ / \ / \ /
+                      *---*---*---*    even
+                  |#
+                  ;; strips
+                  (loop :for lat :from 1 :below (1- *ball-lat-lines*)
+                        :appending (loop :with offset := (1+ (* (1- lat)
+                                                                *ball-long-lines*))
+                                         :for long :from 0 :below *ball-long-lines*
+                                         :for next := (mod (1+ long) *ball-long-lines*)
+                                         :when (oddp lat)
+                                           :appending (list (+ long *ball-long-lines* offset)
+                                                            (+ next *ball-long-lines* offset)
+                                                            (+ long offset)
+                                                            (+ next *ball-long-lines* offset)
+                                                            (+ next offset)
+                                                            (+ long offset))
+                                         :when (evenp lat)
+                                           :appending (list (+ long offset)
+                                                            (+ long *ball-long-lines* offset)
+                                                            (+ next offset)
+                                                            (+ long *ball-long-lines* offset)
+                                                            (+ next *ball-long-lines* offset)
+                                                            (+ next offset))))
+                  ;; south cap
+                  (loop :with offset := (+ 1 (* (- *ball-lat-lines* 2)
+                                                *ball-long-lines*))
+                        :with pole := (+ *ball-long-lines* offset)
+                        :for long :from 0 :below *ball-long-lines*
+                        :for next := (mod (1+ long) *ball-long-lines*)
+                        :collecting (+ next offset)
+                        :collecting (+ long offset)
+                        :collecting (+ pole)))))
     (values (mapcar #'list points points)
             indices)))
 

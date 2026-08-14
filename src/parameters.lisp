@@ -16,12 +16,12 @@
 
 ;; A single directional "sun".  This is the direction pointing *towards* the
 ;; light, not the direction the light travels.  It is normalised in the shader.
-(defparameter *light-direction* (v! -0.9 0.6 1.2))
-(defparameter *light-color* (v! 1.0 0.98 0.94))
+(defparameter *light-direction* (v! -0.3 0.6 2.2))
+(defparameter *light-color* (v! 0.3 0.3 0.25))
 (defparameter *ambient-color* (v! 0.12 0.13 0.16))
 
-(defparameter *field-albedo* (v! 0.35 0.55 0.35))
-(defparameter *field-shininess* 16.0)
+(defparameter *field-albedo* (v! 0.40 0.65 0.40))
+(defparameter *field-shininess* 10.0)
 (defparameter *ball-shininess* 64.0)
 
 (defparameter *camera-position* (v! 15 25.0 10.0))
@@ -37,7 +37,7 @@
 ;; How low the camera may be swung.  Well above zero, so that the view stays
 ;; on the heightfield from above rather than grazing it edge-on or dropping
 ;; underneath it.
-(defparameter *camera-lower-pitch-limit* 15.0)
+(defparameter *camera-lower-pitch-limit* 1.0)
 
 ;; How near the camera may come to straight overhead.  At exactly 90 degrees
 ;; the view direction is parallel to *CAMERA-UP* and LOOK-AT has no way to
@@ -56,3 +56,4 @@
 
 (defparameter *ball-lat-lines* 10)
 (defparameter *ball-long-lines* 20)
+(defparameter *ball-radius* 0.5)

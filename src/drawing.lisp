@@ -17,13 +17,13 @@
 
 (defun draw-ball (ball)
   (when *ball-stream*
-    (let* ((r (ball-radius ball))
-           (model->world (m4:* (m4:translation (ball-position ball))
+    (let* ((r (radius ball))
+           (model->world (m4:* (m4:translation (pos ball))
                                (m4:scale (v! r r r)))))
       (map-g #'render-surface *ball-stream*
              :model->world model->world
              :normal-matrix (normal-matrix model->world)
-             :albedo (ball-color ball)
+             :albedo (color ball)
              :shininess *ball-shininess*))))
 
 (defun draw-frame ()

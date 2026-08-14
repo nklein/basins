@@ -20,7 +20,8 @@
                                                             "parameters"
                                                             "functions"))
                              (:file "balls" :depends-on ("package"
-                                                         "parameters"))
+                                                         "parameters"
+                                                         "geometry"))
                              (:file "drawing" :depends-on ("package"
                                                            "parameters"
                                                            "state"

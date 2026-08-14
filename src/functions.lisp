@@ -79,28 +79,41 @@
 
 (defmethod df/dx ((fn fn-sinc) x y)
   ;; r^2 = (x-x0)^2 + (y-y0)^2
-  ;; v = sqrt(r^2)
-  ;; f = scale * sin( freq * v ) / v
-  ;; df/dx = ( scale * cos( freq * v ) * freq * dv/dx * v - f * dv/dx ) / v^2
-  ;; dv/dx = 1/2 (1/sqrt(r^2)) dr^2/dx
   ;; dr^2/dx = 2(x-x0)
+  ;;
+  ;; r = sqrt(r^2)
+  ;; dr/dx = 1/(2r) * dr^2/dx = (x-x0)/r
+  ;;
+  ;; f = scale * sin( freq * r ) / (freq * r)
+  ;; df/dx = ( scale * cos( freq * r ) * freq * dr/dx * freq * v
+  ;;           - scale * sin( freq * r ) * freq * dr/dx )
+  ;;          / (freq^2 * r^2)
+  ;;       = scale * dr/dx * [ freq * cos( freq * r ) - sin( freq * r ) ] / (freq * r^2)
+  ;;
+  ;; f = scale * sin( freq * r ) * (freq * r)^-1
+  ;; df/dx = scale * sin( freq * r ) * -1 * (freq * r)^-2 * freq * dr/dx
+  ;;         + (freq * r)^-1 * scale * cos( freq * r ) * freq * dr/dx
+  ;;       = scale * freq * dr/dx * [ cos( freq * r ) / (freq * r)
+  ;;                                    - sin( freq * r ) / (freq^2 * r^2) ]
+  ;;       = scale * dr/dx * [ r * freq * cos( freq * r ) - sin( freq * r ) ] / (freq * r^2)
+  ;;       = scale * (x-x0) * [ r * freq * cos( freq * r ) - sin( freq * r ) ] / (freq * r^3)
   (with-accessors ((x0 x0)
                    (y0 y0)
                    (scale scale)
                    (freq freq)) fn
     (let* ((r (%r (- x x0) (- y y0)))
-           (cis-theta (cis (* freq r)))
-           )
+           (cis-theta (cis (* freq r))))
       (cond
         ((< *epsilon* r)
-         (/ (* scale (- (* (cospart cis-theta)
-                           (- x x0))
-                        (/ (* (sinpart cis-theta)
-                              (- x x0))
-                           r)))
-            (* freq freq r r)))
+         (let* ((r*dr/dx (- x x0))
+                (df/dx (/ (* scale
+                             r*dr/dx
+                             (- (* r freq (cospart cis-theta))
+                                (sinpart cis-theta)))
+                          (* freq r r r))))
+           df/dx))
         (t
-         0.0)))))
+         r)))))
 
 (defmethod df/dy ((fn fn-sinc) x y)
   (with-accessors ((x0 x0)
@@ -111,11 +124,12 @@
            (cis-theta (cis (* freq r))))
       (cond
         ((< *epsilon* r)
-         (/ (* scale (- (* (cospart cis-theta)
-                           (- y y0))
-                        (/ (* (sinpart cis-theta)
-                              (- y y0))
-                           r)))
-            (* freq freq r r)))
+         (let* ((r*dr/dy (- y y0))
+                (df/dy (/ (* scale
+                             r*dr/dy
+                             (- (* r freq (cospart cis-theta))
+                                (sinpart cis-theta)))
+                          (* freq r r r))))
+           df/dy))
         (t
-         0.0)))))
+         r)))))
