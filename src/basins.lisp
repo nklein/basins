@@ -26,9 +26,11 @@
 
 (defun run ()
   (init)
+  (sync-viewport)
   (setf *running* t)
-  (loop :while (and *running* (not (shutting-down-p)))
-        :do (continuable (step-frame)))
+  (whilst-listening-to ((#'resize-viewport (window 0) :size))
+    (loop :while (and *running* (not (shutting-down-p)))
+          :do (continuable (step-frame))))
   (values))
 
 (defun stop ()

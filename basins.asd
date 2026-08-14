@@ -5,17 +5,19 @@
   :author "Your Name <your.name@example.com>"
   :license  "Specify license here"
   :version "0.0.1"
-  :serial t
   :depends-on (#:cepl #:rtg-math.vari #:cepl.sdl2 #:swank #:livesupport #:cepl.skitter.sdl2)
   :components ((:module "src"
                 :components ((:file "package")
                              (:file "parameters" :depends-on ("package"))
-                             (:file "state" :depends-on ("package"))
+                             (:file "functions" :depends-on ("package"))
+                             (:file "state" :depends-on ("package"
+                                                         "functions"))
                              (:file "shaders" :depends-on ("package"))
                              (:file "camera" :depends-on ("package"
                                                           "parameters"))
                              (:file "geometry" :depends-on ("package"
-                                                            "parameters"))
+                                                            "parameters"
+                                                            "functions"))
                              (:file "balls" :depends-on ("package"
                                                          "parameters"))
                              (:file "drawing" :depends-on ("package"

@@ -11,8 +11,7 @@
                         *ball-stream* *ball-vertices* *ball-indices*))
     (when object (free object)))
   (setf *field-stream* nil *field-vertices* nil *field-indices* nil
-        *ball-stream* nil *ball-vertices* nil *ball-indices* nil
-        *grid-influences* nil))
+        *ball-stream* nil *ball-vertices* nil *ball-indices* nil))
 
 (defun init ()
   (free-resources)                      ; so re-running does not leak

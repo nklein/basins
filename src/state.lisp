@@ -6,7 +6,10 @@
 ;;;; State
 ;;;; ------------------------------------------------------------------
 
-(defparameter *grid-influences* nil)
+(defparameter *grid-influences* (list (make-instance 'fn-gaussian :scale -10
+                                                                  :sigma^2 (* 3 *grid-scale*))
+                                      (make-instance 'fn-sinc :scale 5 :x0 2)))
+
 
 (defparameter *field-vertices* nil)
 (defparameter *field-indices* nil)

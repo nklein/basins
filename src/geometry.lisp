@@ -6,10 +6,6 @@
 ;;;; Geometry
 ;;;; ------------------------------------------------------------------
 
-(setf *grid-influences* (list (make-instance 'fn-gaussian :scale -10
-                                                          :sigma^2 (* 3 *grid-scale*))
-                              (make-instance 'fn-sinc :scale 5 :x0 2)))
-
 (defun influence-at (x y)
   (reduce (lambda (acc fn)
             (+ acc
