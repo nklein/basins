@@ -12,29 +12,23 @@
                (f fn x y)))
           *grid-influences* :initial-value 0.0))
 
-(defun dinfluence/dx-at (x y)
+(defun dinfluence-at (x y)
   (reduce (lambda (acc fn)
-            (+ acc
-               (df/dx fn x y)))
-          *grid-influences* :initial-value 0.0))
+            (v2:+ acc
+                  (gradient fn x y)))
+          *grid-influences*
+          :initial-value (v! 0.0 0.0)))
 
-(defun dinfluence/dy-at (x y)
-  (reduce (lambda (acc fn)
-            (+ acc
-               (df/dy fn x y)))
-          *grid-influences* :initial-value 0.0))
+(defun tangents (x y)
+  (let ((s (dinfluence-at x y)))
+    (values (v3:normalize (v! 1 0 (v:x s)))
+            (v3:normalize (v! 0 1 (v:y s))))))
 
-(defun tangent-x (x y)
-  (let ((s (dinfluence/dx-at x y)))
-    (v3:normalize (v! 1 0 s))))
-
-(defun tangent-y (x y)
-  (let ((s (dinfluence/dy-at x y)))
-    (v3:normalize (v! 0 1 s))))
-
+(declaim (inline sinpart))
 (defun sinpart (cis)
   (imagpart cis))
 
+(declaim (inline cospart))
 (defun cospart (cis)
   (realpart cis))
 
@@ -65,8 +59,8 @@
      w))
 
 (defun %sheet-normal (x y)
-  (v3:cross (tangent-x x y)
-            (tangent-y x y)))
+  (multiple-value-bind (tx ty) (tangents x y)
+    (v3:cross tx ty)))
 
 (defun %random-normal ()
   (let ((theta (* 1/2 pi (- (random 1.0) 0.5)))

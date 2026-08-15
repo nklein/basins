@@ -32,7 +32,7 @@
     (scale-ball-velocity b s)))
 
 (defun random-velocity ()
-  (let ((cis-theta (* (random 0.125)
+  (let ((cis-theta (* (random 0.00001)
                       (cis (random (* 2 pi))))))
     (v! (cospart cis-theta)
         (sinpart cis-theta)
@@ -105,10 +105,11 @@ the change out of the kinetic energy closes the loop."
                ;; The surface enters only through its gradient: a = g * grad h,
                ;; which is -grad U for U = -g * h, so this is a particle in a
                ;; potential well.
-               (setf vel (v3:+ vel
-                               (v! (* gforce h (dinfluence/dx-at (v:x pos) (v:y pos)))
-                                   (* gforce h (dinfluence/dy-at (v:x pos) (v:y pos)))
-                                   0)))))
+               (let ((gradient (dinfluence-at (v:x pos) (v:y pos))))
+                 (setf vel (v3:+ vel
+                                 (v! (* gforce h (v:x gradient))
+                                     (* gforce h (v:y gradient))
+                                     0))))))
         ;; Velocity Verlet: half kick, full drift, half kick.  Unlike the plain
         ;; symplectic Euler this replaces, it is time-reversible, and that is
         ;; the property that keeps the energy error a bounded wobble instead of

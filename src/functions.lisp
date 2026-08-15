@@ -15,8 +15,7 @@
   ())
 
 (defgeneric f (fn x y))
-(defgeneric df/dx (fn x y))
-(defgeneric df/dy (fn x y))
+(defgeneric gradient (fn x y))
 
 (defclass fn-gaussian (fn)
   ((x0 :reader x0 :initarg :x0)
@@ -34,7 +33,7 @@
       (* scale
          (exp (- (/ r^2 sigma^2)))))))
 
-(defmethod df/dx ((fn fn-gaussian) x y)
+(defmethod gradient ((fn fn-gaussian) x y)
   ;; r^2 = (x-x0)^2 + (y-y0)^2
   ;; dr^2/dx = 2(x-x0)
   ;; u = -r^2 / sigma^2
@@ -42,21 +41,13 @@
   ;; df/dx = f * du/dx
   ;; du/dx = - dr^2/dx / sigma^2 = -2(x-x0)/sigma^2
   (with-accessors ((x0 x0)
+                   (y0 y0)
                    (sigma^2 sigma^2)) fn
-    (let ((du/dx (/ (* -2 (- x x0)) sigma^2)))
-      (* (f fn x y) du/dx))))
-
-(defmethod df/dy ((fn fn-gaussian) x y)
-  ;; r^2 = (x-x0)^2 + (y-y0)^2
-  ;; dr^2/dy = 2(y-y0)
-  ;; u = -r^2 / sigma^2
-  ;; f = scale * e^u
-  ;; df/dy = f * du/dy
-  ;; du/dy = - dr^2/dy / sigma^2 = -2(y-y0)/sigma^2
-  (with-accessors ((y0 y0)
-                   (sigma^2 sigma^2)) fn
-    (let ((du/dy (/ (* -2 (- y y0)) sigma^2)))
-      (* (f fn x y) du/dy))))
+    (let ((du/dx (/ (* -2 (- x x0)) sigma^2))
+          (du/dy (/ (* -2 (- y y0)) sigma^2))
+          (f (f fn x y)))
+      (v! (* f du/dx)
+          (* f du/dy)))))
 
 (defclass fn-sinc (fn)
   ((x0 :reader x0 :initarg :x0)
@@ -77,7 +68,7 @@
              (* freq r))
           scale))))
 
-(defmethod df/dx ((fn fn-sinc) x y)
+(defmethod gradient ((fn fn-sinc) x y)
   ;; r^2 = (x-x0)^2 + (y-y0)^2
   ;; dr^2/dx = 2(x-x0)
   ;;
@@ -106,30 +97,13 @@
       (cond
         ((< *epsilon* r)
          (let* ((r*dr/dx (- x x0))
-                (df/dx (/ (* scale
-                             r*dr/dx
+                (r*dr/dy (- y y0))
+                (alpha (/ (* scale
                              (- (* r freq (cospart cis-theta))
                                 (sinpart cis-theta)))
-                          (* freq r r r))))
-           df/dx))
+                          (* freq r r r)))
+                (df/dx (* alpha r*dr/dx))
+                (df/dy (* alpha r*dr/dy)))
+           (v! df/dx df/dy)))
         (t
-         r)))))
-
-(defmethod df/dy ((fn fn-sinc) x y)
-  (with-accessors ((x0 x0)
-                   (y0 y0)
-                   (scale scale)
-                   (freq freq)) fn
-    (let* ((r (%r (- x x0) (- y y0)))
-           (cis-theta (cis (* freq r))))
-      (cond
-        ((< *epsilon* r)
-         (let* ((r*dr/dy (- y y0))
-                (df/dy (/ (* scale
-                             r*dr/dy
-                             (- (* r freq (cospart cis-theta))
-                                (sinpart cis-theta)))
-                          (* freq r r r))))
-           df/dy))
-        (t
-         r)))))
+         (v! 0.0 0.0))))))

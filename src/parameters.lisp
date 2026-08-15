@@ -52,7 +52,7 @@
 ;; error only at a *fixed* step; handed a step that varies with the framerate
 ;; the error random-walks instead.  So real time is accumulated and paid out in
 ;; whole substeps of this size.
-(defparameter *fixed-timestep* (/ 1.0 240.0))
+(defparameter *fixed-timestep* (/ 1.0 120.0))
 
 (defparameter *epsilon* 0.00001)
 
