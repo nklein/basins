@@ -18,7 +18,9 @@
   ((position :accessor pos :initarg :position)
    (velocity :accessor vel :initarg :velocity)
    (radius :reader radius :initarg :radius)
-   (color :reader color :initarg :color))
+   (color :reader color :initarg :color)
+   (bx :accessor bx :initform -1)
+   (by :accessor by :initform -1))
   (:default-initargs :position (v! 0 0 0)
                      :velocity (v! 0 0 0)
                      :radius *ball-radius*
@@ -134,7 +136,23 @@ the change out of the kinetic energy closes the loop."
         (kick dt/2))
       (snap-to-surface b))))
 
-(defun reconcile-collisions ()
+(defun put-ball-in-bucket (buckets bucket-grid-coord-fn b &optional (force nil))
+  (let ((ox (bx b))
+        (oy (by b))
+        (pos (pos b)))
+    (let ((x (funcall bucket-grid-coord-fn (v:x pos)))
+          (y (funcall bucket-grid-coord-fn (v:y pos))))
+      (when (or force
+                (/= ox x)
+                (/= oy y))
+        (when (and (plusp ox)
+                   (plusp oy))
+          (setf (aref buckets ox oy) (remove b (aref buckets ox oy))))
+        (push b (aref buckets x y))
+        (setf (bx b) x
+              (by b) y)))))
+
+(defun reconcile-collisions (a rest buckets bucket-grid-coord-fn)
   ;; Since all balls are the same mass and perfectly elastic, a pair just
   ;; exchanges the component of relative velocity along the line of centres.
   ;;
@@ -142,43 +160,94 @@ the change out of the kinetic energy closes the loop."
   ;; into the impulse leaves a phantom VEL.Z that never decays and never does
   ;; anything -- Z position is re-derived from the surface either way -- but
   ;; which every energy tally then counts.
-  (loop :for (a . rest) :on *balls*
-        :do (with-accessors ((pa pos) (va vel)) a
-              (let ((ra (radius a)))
-                (dolist (b rest)
-                  (with-accessors ((pb pos) (vb vel)) b
-                    (let* ((dx (- (v:x pb) (v:x pa)))
-                           (dy (- (v:y pb) (v:y pa)))
-                           (dist^2 (+ (* dx dx) (* dy dy)))
-                           (sum-r (+ ra (radius b))))
-                      (when (< *epsilon* dist^2 (* sum-r sum-r))
-                        (let ((dv.dp (+ (* (- (v:x vb) (v:x va)) dx)
-                                        (* (- (v:y vb) (v:y va)) dy))))
-                          ;; Only trade momentum when the pair is actually closing.  One
-                          ;; that overlaps but is already separating would otherwise be
-                          ;; flipped a second time, which is a pure energy source -- and
-                          ;; in a basin, where balls pile up, that fires nonstop.
-                          (when (minusp dv.dp)
-                            (let ((s (/ dv.dp dist^2)))
-                              (incf (v:x va) (* s dx))
-                              (incf (v:y va) (* s dy))
-                              (decf (v:x vb) (* s dx))
-                              (decf (v:y vb) (* s dy)))))
-                        ;; Separate them symmetrically along the line of centres.  This
-                        ;; is a correction, not motion, so it goes through SHIFT-BALL
-                        ;; to keep it from doing free work against the field.
-                        (let* ((dist (sqrt dist^2))
-                               (push (/ (- (+ sum-r *epsilon*) dist)
-                                        (* 2 dist))))
-                          (shift-ball a (- (* push dx)) (- (* push dy)))
-                          (shift-ball b (* push dx) (* push dy)))))))))))
+  (with-accessors ((pa pos) (va vel)) a
+    (let ((ra (radius a)))
+      (dolist (b rest)
+        (with-accessors ((pb pos) (vb vel)) b
+          (let* ((dx (- (v:x pb) (v:x pa)))
+                 (dy (- (v:y pb) (v:y pa)))
+                 (dist^2 (+ (* dx dx) (* dy dy)))
+                 (sum-r (+ ra (radius b))))
+            (when (< *epsilon* dist^2 (* sum-r sum-r))
+              (let ((dv.dp (+ (* (- (v:x vb) (v:x va)) dx)
+                              (* (- (v:y vb) (v:y va)) dy))))
+                ;; Only trade momentum when the pair is actually closing.  One
+                ;; that overlaps but is already separating would otherwise be
+                ;; flipped a second time, which is a pure energy source -- and
+                ;; in a basin, where balls pile up, that fires nonstop.
+                (when (minusp dv.dp)
+                  (let ((s (/ dv.dp dist^2)))
+                    (incf (v:x va) (* s dx))
+                    (incf (v:y va) (* s dy))
+                    (decf (v:x vb) (* s dx))
+                    (decf (v:y vb) (* s dy)))))
+              ;; Separate them symmetrically along the line of centres.  This
+              ;; is a correction, not motion, so it goes through SHIFT-BALL
+              ;; to keep it from doing free work against the field.
+              (let* ((dist (sqrt dist^2))
+                     (push (/ (- (+ sum-r *epsilon*) dist)
+                              (* 2 dist))))
+                (shift-ball a (- (* push dx)) (- (* push dy)))
+                (shift-ball b (* push dx) (* push dy)))
+              (put-ball-in-bucket buckets bucket-grid-coord-fn a)
+              (put-ball-in-bucket buckets bucket-grid-coord-fn b))))))))
+
+(defun reconcile-collisions-between-buckets (as bs buckets bucket-grid-coord-fn)
+  (if (eql as bs)
+      (loop :for (a . rest) :on as
+            :do (reconcile-collisions a rest buckets bucket-grid-coord-fn))
+      (loop :for a :in as
+            :do (reconcile-collisions a bs buckets bucket-grid-coord-fn))))
+
+(defun reconcile-collisions-in-buckets (buckets bucket-grid-coord-fn)
+  (let ((bw (array-dimension buckets 0))
+        (bh (array-dimension buckets 1))
+        (cmps 0))
+    (flet ((dorow (bx ox)
+             (loop :for by :from 0 :below bh
+                   :for as := (aref buckets bx by)
+                   :do (let ((bs (aref buckets ox by)))
+                         (reconcile-collisions-between-buckets as bs buckets bucket-grid-coord-fn)
+                         (incf cmps (* (length as) (length bs))))
+                   :when (plusp by)
+                     :do (let ((bs (aref buckets ox (1- by))))
+                           (reconcile-collisions-between-buckets as bs buckets bucket-grid-coord-fn)
+                           (incf cmps (* (length as) (length bs))))
+                   :when (< (1+ by) bh)
+                     :do (let ((bs (aref buckets ox (1+ by))))
+                           (reconcile-collisions-between-buckets as bs buckets bucket-grid-coord-fn)
+                           (incf cmps (* (length as) (length bs)))))))
+      (loop :for bx :from 0 :below bw
+            :do (dorow bx bx)
+            :when (plusp bx)
+              :do (dorow bx (1- bx))
+            :when (< (1+ bx) bw)
+              :do (dorow bx (1+ bx)))
+      #+(or)
+      (format *debug-io* "~A~%" cmps))))
+
+(defun make-buckets ()
+  (let* ((width (ceiling *grid-scale* (+ (* *ball-radius* 2) *epsilon*)))
+         (width (if (oddp width)
+                    (1+ width)
+                    width))
+         (scale (/ *grid-scale* width))
+         (padded-width (+ width 4))
+         (offset (/ padded-width 2)))
+    (values (make-array (list padded-width padded-width)
+                        :initial-element nil)
+            (lambda (x)
+              (+ (round x scale)
+                 offset)))))
 
 (defun update-balls (dt)
   "Advance every ball by DT seconds."
-  (dolist (b *balls*)
-    (update-ball b dt))
-  (reconcile-collisions))
-
+  (multiple-value-bind (buckets bucket-grid-coord-fn) (make-buckets)
+    (dolist (b *balls*)
+      (update-ball b dt)
+      (put-ball-in-bucket buckets bucket-grid-coord-fn b t))
+    (reconcile-collisions-in-buckets buckets bucket-grid-coord-fn)
+    ))
 
 (defun momentum (b)
   (v3:length (vel b)))
