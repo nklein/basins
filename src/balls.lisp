@@ -70,34 +70,67 @@ this just re-derives Z from X and Y."
     (setf (v:z pos) (+ (influence-at (v:x pos) (v:y pos))
                        (radius b)))))
 
+(defun shift-ball (b dx dy)
+  "Shift B by (DX, DY) in the plane, keeping its total energy fixed.
+
+Nudging a ball sideways changes the height of the field under it, and so its
+potential energy.  Left uncompensated that is a pump: down in a basin, gravity
+turns potential into kinetic every step as a contact compresses, and pushing
+the overlap back out restores the potential while the kinetic stays.  Taking
+the change out of the kinetic energy closes the loop."
+  (with-accessors ((pos pos) (vel vel) (radius radius)) b
+    (let ((h0 (- (v:z pos) radius)))
+      (incf (v:x pos) dx)
+      (incf (v:y pos) dy)
+      (let ((h1 (influence-at (v:x pos) (v:y pos))))
+        (setf (v:z pos) (+ h1 (radius b)))
+        ;; U = -g * h, so the move costs (-g) * (h1 - h0).
+        (let* ((du (* (- *gravitational-force*) (- h1 h0)))
+               (ke (kinetic-energy b))
+               (ke* (- ke du)))
+          (cond ((not (plusp ke)) nil)   ; nothing to scale
+                ((plusp ke*)
+                 (setf vel (v3:*s vel (sqrt (/ ke* ke)))))
+                ;; Not enough kinetic energy to pay for the lift.  Stop the
+                ;; ball rather than take the square root of a negative.
+                (t
+                 (setf vel (v! 0 0 0)))))))))
+
 (defun update-ball (b dt)
   (let ((gforce *gravitational-force*)
-        (limit (- (/ *grid-scale* 2) *epsilon*)))
+        (limit (- (/ *grid-scale* 2) *epsilon*))
+        (dt/2 (/ dt 2.0)))
     (with-accessors ((pos pos) (vel vel)) b
-      ;; Symplectic Euler in the XY plane.  The surface enters only through its
-      ;; gradient: a = g * grad h, which is -grad U for U = -g * h, so this is
-      ;; a particle in a potential well and conserves 1/2|v|^2 + U exactly.
-      (let ((d/dx (dinfluence/dx-at (v:x pos) (v:y pos)))
-            (d/dy (dinfluence/dy-at (v:x pos) (v:y pos))))
-        (setf vel (v3:+ vel
-                        (v! (* gforce dt d/dx)
-                            (* gforce dt d/dy)
-                            0))))
-      (setf pos (v3:+ pos
-                      (v3:*s vel dt)))
-      ;; Bounce at the edges.  Mirror the overshoot rather than clamping it
-      ;; away: clamping teleports the ball to the wall, and on a slope that
-      ;; jump in height is free potential energy.
-      (macrolet ((bounce (axis)
-                   `(let ((p (,axis pos)))
-                      (cond ((> p limit)
-                             (setf (,axis pos) (- (* 2 limit) p)
-                                   (,axis vel) (- (,axis vel))))
-                            ((< p (- limit))
-                             (setf (,axis pos) (- (* -2 limit) p)
-                                   (,axis vel) (- (,axis vel))))))))
-        (bounce v:x)
-        (bounce v:y))
+      (flet ((kick (h)
+               ;; The surface enters only through its gradient: a = g * grad h,
+               ;; which is -grad U for U = -g * h, so this is a particle in a
+               ;; potential well.
+               (setf vel (v3:+ vel
+                               (v! (* gforce h (dinfluence/dx-at (v:x pos) (v:y pos)))
+                                   (* gforce h (dinfluence/dy-at (v:x pos) (v:y pos)))
+                                   0)))))
+        ;; Velocity Verlet: half kick, full drift, half kick.  Unlike the plain
+        ;; symplectic Euler this replaces, it is time-reversible, and that is
+        ;; the property that keeps the energy error a bounded wobble instead of
+        ;; a slow one-way slide.
+        (kick dt/2)
+        (setf pos (v3:+ pos
+                        (v3:*s vel dt)))
+        ;; Bounce at the edges.  Mirror the overshoot rather than clamping it
+        ;; away: clamping teleports the ball to the wall, and on a slope that
+        ;; jump in height is free potential energy.  A mirror is its own
+        ;; inverse, so it leaves the reversibility above intact.
+        (macrolet ((bounce (axis)
+                     `(let ((p (,axis pos)))
+                        (cond ((> p limit)
+                               (setf (,axis pos) (- (* 2 limit) p)
+                                     (,axis vel) (- (,axis vel))))
+                              ((< p (- limit))
+                               (setf (,axis pos) (- (* -2 limit) p)
+                                     (,axis vel) (- (,axis vel))))))))
+          (bounce v:x)
+          (bounce v:y))
+        (kick dt/2))
       (snap-to-surface b))))
 
 (defun reconcile-collisions ()
@@ -108,39 +141,36 @@ this just re-derives Z from X and Y."
   ;; into the impulse leaves a phantom VEL.Z that never decays and never does
   ;; anything -- Z position is re-derived from the surface either way -- but
   ;; which every energy tally then counts.
-  (dolist (a *balls*)
-    (with-accessors ((pa pos) (va vel) (ra radius)) a
-      (dolist (b *balls*)
-        (unless (eq a b)
-          (with-accessors ((pb pos) (vb vel) (rb radius)) b
-            (let* ((dx (- (v:x pb) (v:x pa)))
-                   (dy (- (v:y pb) (v:y pa)))
-                   (dist^2 (+ (* dx dx) (* dy dy)))
-                   (sum-r (+ ra rb)))
-              (when (< *epsilon* dist^2 (* sum-r sum-r))
-                (let ((dv.dp (+ (* (- (v:x vb) (v:x va)) dx)
-                                (* (- (v:y vb) (v:y va)) dy))))
-                  ;; Only trade momentum when the pair is actually closing.  One
-                  ;; that overlaps but is already separating would otherwise be
-                  ;; flipped a second time, which is a pure energy source -- and
-                  ;; in a basin, where balls pile up, that fires nonstop.
-                  (when (minusp dv.dp)
-                    (let ((s (/ dv.dp dist^2)))
-                      (incf (v:x va) (* s dx))
-                      (incf (v:y va) (* s dy))
-                      (decf (v:x vb) (* s dx))
-                      (decf (v:y vb) (* s dy)))))
-                ;; Separate them symmetrically along the line of centres, then
-                ;; put both back on the field.
-                (let* ((dist (sqrt dist^2))
-                       (push (/ (- (+ sum-r *epsilon*) dist)
-                                (* 2 dist))))
-                  (decf (v:x pa) (* push dx))
-                  (decf (v:y pa) (* push dy))
-                  (incf (v:x pb) (* push dx))
-                  (incf (v:y pb) (* push dy))
-                  (snap-to-surface a)
-                  (snap-to-surface b))))))))))
+  (loop :for (a . rest) :on *balls*
+        :do (with-accessors ((pa pos) (va vel)) a
+              (let ((ra (radius a)))
+                (dolist (b rest)
+                  (with-accessors ((pb pos) (vb vel)) b
+                    (let* ((dx (- (v:x pb) (v:x pa)))
+                           (dy (- (v:y pb) (v:y pa)))
+                           (dist^2 (+ (* dx dx) (* dy dy)))
+                           (sum-r (+ ra (radius b))))
+                      (when (< *epsilon* dist^2 (* sum-r sum-r))
+                        (let ((dv.dp (+ (* (- (v:x vb) (v:x va)) dx)
+                                        (* (- (v:y vb) (v:y va)) dy))))
+                          ;; Only trade momentum when the pair is actually closing.  One
+                          ;; that overlaps but is already separating would otherwise be
+                          ;; flipped a second time, which is a pure energy source -- and
+                          ;; in a basin, where balls pile up, that fires nonstop.
+                          (when (minusp dv.dp)
+                            (let ((s (/ dv.dp dist^2)))
+                              (incf (v:x va) (* s dx))
+                              (incf (v:y va) (* s dy))
+                              (decf (v:x vb) (* s dx))
+                              (decf (v:y vb) (* s dy)))))
+                        ;; Separate them symmetrically along the line of centres.  This
+                        ;; is a correction, not motion, so it goes through SHIFT-BALL
+                        ;; to keep it from doing free work against the field.
+                        (let* ((dist (sqrt dist^2))
+                               (push (/ (- (+ sum-r *epsilon*) dist)
+                                        (* 2 dist))))
+                          (shift-ball a (- (* push dx)) (- (* push dy)))
+                          (shift-ball b (* push dx) (* push dy)))))))))))
 
 (defun update-balls (dt)
   "Advance every ball by DT seconds."
